@@ -33,7 +33,11 @@ function Clock() {
 }
 
 function Shell() {
-  const [view, setView] = useState<View>("home");
+  // ?view=services etc. opens a section directly (handy for links and screenshots).
+  const [view, setView] = useState<View>(() => {
+    const v = new URLSearchParams(window.location.search).get("view");
+    return dock.some((d) => d.view === v) ? (v as View) : "home";
+  });
   const status = usePoll(api.status, 3000);
   const history = usePoll(() => api.history(30), 6000);
   const wifi = usePoll(api.wifi, 10000);
