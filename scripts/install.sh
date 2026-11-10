@@ -101,8 +101,8 @@ if [ $GRUB -eq 1 ]; then
     put system/grub/42_adg_power_os /etc/grub.d/42_adg_power_os 0755
     run sudo update-grub
     if [ $APPLY -eq 1 ]; then
-        grep -q "menuentry 'ADG Power OS" /boot/grub/grub.cfg && echo "✓ ADG Power OS entry present" || { echo "✗ entry missing, restoring backup"; sudo cp "$BACKUP/grub.cfg" /boot/grub/grub.cfg; exit 1; }
-        grep -q "^menuentry 'Ubuntu'" /boot/grub/grub.cfg && echo "✓ Ubuntu entry unchanged" || true
+        sudo grep -q "menuentry 'ADG Power OS" /boot/grub/grub.cfg && echo "✓ ADG Power OS entry present" || { echo "✗ entry missing, restoring backup"; sudo cp "$BACKUP/grub.cfg" /boot/grub/grub.cfg; exit 1; }
+        sudo grep -q "^menuentry 'Ubuntu'" /boot/grub/grub.cfg && echo "✓ Ubuntu entry unchanged" || true
     fi
     echo "  GRUB menu: if it is hidden, hold Shift (BIOS) or press Esc (UEFI) at boot."
 else
