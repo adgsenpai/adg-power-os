@@ -1,0 +1,91 @@
+# ADG Power OS — Sway configuration
+# Copy to ~/.config/adg-power/sway.conf to customise; the session prefers it.
+
+set $mod Mod4
+set $term foot
+set $dash adg-power-dashboard
+
+# ---- look (design tokens: bg #0b101b, panel #161c2d, purple #a855f7, cyan #55d9ff)
+output * bg /usr/share/backgrounds/adg-power/adg-power-2560x1440.png fill #0b101b
+default_border pixel 2
+default_floating_border pixel 2
+gaps inner 8
+client.focused          #a855f7 #161c2d #edf1ff #55d9ff #a855f7
+client.focused_inactive #30334f #161c2d #9da7c2 #30334f #30334f
+client.unfocused        #30334f #0b101b #9da7c2 #30334f #30334f
+font pango:Inter 10
+
+# ---- power: idle dim, lock and DPMS off. No suspend timer (avoids killing builds).
+exec swayidle -w \
+    timeout 120 'adg-powerd call POST /api/brightness "{\"percent\":5}"' \
+         resume 'adg-powerd call POST /api/brightness "{\"percent\":20}"' \
+    timeout 300 'swaymsg "output * power off"' resume 'swaymsg "output * power on"' \
+    before-sleep 'swaylock -f -c 0b101b'
+
+# ---- input
+input type:touchpad {
+    tap enabled
+    natural_scroll enabled
+    dwt enabled
+}
+
+# ---- session services
+# Hand the Wayland environment to systemd/D-Bus activated services.
+exec systemctl --user import-environment WAYLAND_DISPLAY SWAYSOCK XDG_CURRENT_DESKTOP XDG_SESSION_TYPE
+exec dbus-update-activation-environment --systemd WAYLAND_DISPLAY SWAYSOCK XDG_CURRENT_DESKTOP
+# Polkit agent, needed for service stops and the privileged helper.
+exec /usr/lib/x86_64-linux-gnu/polkit-mate/polkit-mate-authentication-agent-1
+# Telemetry daemon, then the eco profile (prior values are saved for revert).
+exec systemctl --user start adg-powerd.service
+exec sh -c 'for i in 1 2 3 4 5 6 7 8 9 10; do adg-powerd call GET /api/health >/dev/null 2>&1 && break; sleep 0.5; done; adg-powerd call POST /api/eco/apply'
+exec $dash
+
+for_window [app_id="adg-power-dashboard"] border none
+
+# ---- keys
+bindsym $mod+Return exec $term
+bindsym $mod+c exec $term claude
+bindsym $mod+b exec google-chrome --ozone-platform-hint=auto
+bindsym $mod+d exec $dash
+bindsym $mod+e exec nautilus
+bindsym $mod+q kill
+bindsym $mod+f fullscreen
+bindsym $mod+Shift+space floating toggle
+bindsym $mod+Left focus left
+bindsym $mod+Right focus right
+bindsym $mod+Up focus up
+bindsym $mod+Down focus down
+bindsym $mod+Shift+Left move left
+bindsym $mod+Shift+Right move right
+bindsym $mod+1 workspace number 1
+bindsym $mod+2 workspace number 2
+bindsym $mod+3 workspace number 3
+bindsym $mod+4 workspace number 4
+bindsym $mod+Shift+1 move container to workspace number 1
+bindsym $mod+Shift+2 move container to workspace number 2
+bindsym $mod+Shift+3 move container to workspace number 3
+bindsym $mod+Shift+4 move container to workspace number 4
+bindsym $mod+Shift+c reload
+bindsym $mod+Shift+e exec swaynag -t warning -m 'Leave ADG Power OS?' -B 'Log out' 'swaymsg exit'
+bindsym $mod+l exec swaylock -f -c 0b101b
+
+bindsym XF86MonBrightnessUp exec adg-powerd call POST /api/brightness '{"percent":60}'
+bindsym XF86MonBrightnessDown exec adg-powerd call POST /api/brightness '{"percent":15}'
+bindsym XF86AudioRaiseVolume exec wpctl set-volume -l 1.0 @DEFAULT_AUDIO_SINK@ 5%+
+bindsym XF86AudioLowerVolume exec wpctl set-volume @DEFAULT_AUDIO_SINK@ 5%-
+bindsym XF86AudioMute exec wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle
+bindsym XF86AudioPlay exec adg-powerd call POST /api/audio/playpause
+
+# ---- minimal status bar (refreshes every 10 s to stay cheap)
+bar {
+    position top
+    status_command while :; do adg-powerd once | head -1 | cut -c1-80; date '+%a %d %b  %H:%M'; sleep 10; done | paste -sd'  ' --
+    colors {
+        background #0b101bdd
+        statusline #edf1ff
+        focused_workspace #a855f7 #a855f7 #ffffff
+        inactive_workspace #161c2d #161c2d #9da7c2
+    }
+}
+
+include /etc/sway/config.d/*

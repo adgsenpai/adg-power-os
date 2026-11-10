@@ -1,0 +1,41 @@
+@import "tailwindcss";
+
+/* Design tokens from assets/graphics/design-tokens.css */
+@theme {
+  --color-bg: #0b101b;
+  --color-panel: #161c2d;
+  --color-panel-hover: #20283d;
+  --color-border: #30334f;
+  --color-text: #edf1ff;
+  --color-muted: #9da7c2;
+  --color-purple: #a855f7;
+  --color-cyan: #55d9ff;
+  --color-green: #5ee8a0;
+  --color-amber: #f5c451;
+  --color-red: #ff6b81;
+  --radius-card: 18px;
+  --font-sans: "Inter", "Cantarell", "Noto Sans", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", "Fira Code", ui-monospace, monospace;
+}
+
+html, body, #root { height: 100%; }
+body {
+  margin: 0;
+  background: var(--color-bg) url("/wallpaper.png") center / cover fixed;
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+.card {
+  background: color-mix(in srgb, var(--color-panel) 86%, transparent);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-card);
+  backdrop-filter: blur(14px);
+}
+.tile { transition: background 120ms, border-color 120ms, transform 120ms; }
+.tile:hover { background: var(--color-panel-hover); }
+.tile:active { transform: scale(0.98); }
+.num { font-variant-numeric: tabular-nums; }
+::-webkit-scrollbar { width: 8px; }
+::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 8px; }
+input[type="range"] { accent-color: var(--color-purple); }

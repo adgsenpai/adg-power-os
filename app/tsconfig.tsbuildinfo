@@ -1,0 +1,1 @@
+{"root":["./src/App.tsx","./src/api.ts","./src/format.test.ts","./src/format.ts","./src/icons.tsx","./src/main.tsx","./src/components/Connectivity.tsx","./src/components/Home.tsx","./src/components/PowerChart.tsx","./src/components/System.tsx","./src/components/ui.tsx"],"version":"5.9.3"}

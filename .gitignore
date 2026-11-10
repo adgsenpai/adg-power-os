@@ -1,0 +1,7 @@
+/target
+node_modules
+app/dist
+*.log
+app/src-tauri/gen
+.claude/
+reports/

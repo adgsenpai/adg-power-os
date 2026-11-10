@@ -1,0 +1,59 @@
+#!/bin/sh
+# /etc/grub.d/42_adg_power_os — adds an "ADG Power OS" entry after the normal
+# Ubuntu entries. It boots the same kernel as the default entry with one extra
+# argument, adgpower.eco=1. The normal and recovery entries are not modified.
+#
+# Kernel paths are not hard-coded: the newest kernel is found the same way
+# 10_linux does, via grub-mkconfig_lib helpers.
+set -e
+
+prefix="/usr"
+exec_prefix="/usr"
+datarootdir="/usr/share"
+. "$pkgdatadir/grub-mkconfig_lib"
+
+MARKER="adgpower.eco=1"
+# Extra eco-only kernel options (kept conservative; edit /etc/default/adg-power).
+ADG_EXTRA_CMDLINE="nvidia.NVreg_DynamicPowerManagement=0x02"
+[ -r /etc/default/adg-power ] && . /etc/default/adg-power
+
+# Newest kernel with a matching initrd.
+list=""
+for f in /boot/vmlinuz-* ; do
+    [ -f "$f" ] || continue
+    case "$f" in *.efi.signed|*.old|*.dpkg-*) continue ;; esac
+    list="$list $f"
+done
+[ -n "$list" ] || exit 0
+# version_sort is provided by grub-mkconfig_lib (newest last).
+linux=$(echo $list | tr ' ' '\n' | version_sort | tail -n 1)
+version=$(echo "$linux" | sed -e 's,^.*/vmlinuz-,,')
+initrd=""
+for i in "initrd.img-$version" "initramfs-$version.img"; do
+    [ -f "/boot/$i" ] && initrd="/boot/$i" && break
+done
+[ -n "$initrd" ] || { echo "42_adg_power_os: no initrd for $version, skipping" >&2; exit 0; }
+
+GRUB_DEVICE=${GRUB_DEVICE:-$(${grub_probe} --target=device /)}
+rel_linux=$(make_system_path_relative_to_its_root "$linux")
+rel_initrd=$(make_system_path_relative_to_its_root "$initrd")
+linux_root_device="root=${GRUB_DEVICE}"
+if [ -n "${GRUB_DEVICE_UUID:-}" ] && [ "${GRUB_DISABLE_LINUX_UUID:-}" != "true" ] && ! echo "$GRUB_DEVICE" | grep -q '^/dev/mapper/'; then
+    linux_root_device="root=UUID=${GRUB_DEVICE_UUID}"
+fi
+
+echo "Found ADG Power OS entry for kernel: $linux" >&2
+
+cat <<GRUBEOF
+menuentry 'ADG Power OS (low-power Ubuntu session)' --class ubuntu --class gnu-linux --class os \$menuentry_id_option 'adg-power-os' {
+	recordfail
+	load_video
+	insmod gzio
+GRUBEOF
+prepare_grub_to_access_device "$(${grub_probe} --target=device "$linux")" | sed -e 's/^/	/'
+cat <<GRUBEOF
+	echo	'Loading ADG Power OS (Linux $version) ...'
+	linux	$rel_linux $linux_root_device ro ${GRUB_CMDLINE_LINUX:-} ${GRUB_CMDLINE_LINUX_DEFAULT:-} $MARKER $ADG_EXTRA_CMDLINE
+	initrd	$rel_initrd
+}
+GRUBEOF

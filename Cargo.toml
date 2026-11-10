@@ -1,0 +1,19 @@
+[workspace]
+resolver = "2"
+members = ["crates/adg-powerd", "app/src-tauri"]
+# The Tauri shell needs libwebkit2gtk-4.1-dev; plain `cargo build` skips it.
+default-members = ["crates/adg-powerd"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+[profile.dev]
+debug = 0
+
+[profile.release]
+opt-level = "s"
+lto = "thin"
+strip = true
+codegen-units = 4

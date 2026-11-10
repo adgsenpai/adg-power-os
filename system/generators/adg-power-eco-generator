@@ -1,0 +1,42 @@
+#!/bin/sh
+# systemd generator for ADG Power OS eco boot.
+#
+# Installed as both:
+#   /usr/lib/systemd/system-generators/adg-power-eco-generator
+#   /usr/lib/systemd/user-generators/adg-power-eco-generator
+#
+# Does nothing unless the kernel command line contains adgpower.eco=1 (only
+# the "ADG Power OS" GRUB entry passes it). When present it masks the units
+# listed in /etc/adg-power/eco-mask-{system,user}.list by linking them to
+# /dev/null in the *early* generator directory, which lives under /run.
+# Nothing is written to /etc, so the next normal boot is untouched.
+#
+# Generators must never fail the boot: every error path exits 0.
+
+set -u
+EARLY_DIR="${2:-}"
+[ -n "$EARLY_DIR" ] || exit 0
+
+# Overrides exist only for scripts/test-generator.sh.
+CMDLINE="${ADG_POWER_CMDLINE:-/proc/cmdline}"
+CONF="${ADG_POWER_CONF_DIR:-/etc/adg-power}"
+
+grep -qw 'adgpower.eco=1' "$CMDLINE" 2>/dev/null || exit 0
+
+case "$0" in
+    *user-generators*) LIST="$CONF/eco-mask-user.list" ;;
+    *) LIST="$CONF/eco-mask-system.list" ;;
+esac
+[ -r "$LIST" ] || exit 0
+
+mkdir -p "$EARLY_DIR" 2>/dev/null || exit 0
+while IFS= read -r unit; do
+    case "$unit" in ''|\#*) continue ;; esac
+    # Only plain unit names: letters, digits and ._-@:
+    case "$unit" in *[!A-Za-z0-9._@:-]*) continue ;; esac
+    case "$unit" in
+        NetworkManager.service|systemd-*|dbus.*|wpa_supplicant.service) continue ;;
+    esac
+    ln -sf /dev/null "$EARLY_DIR/$unit" 2>/dev/null || true
+done < "$LIST"
+exit 0

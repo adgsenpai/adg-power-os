@@ -1,0 +1,18 @@
+#!/bin/sh
+# ADG Power OS Wayland session entry point (installed to /usr/bin).
+# Started by the display manager from /usr/share/wayland-sessions/adg-power.desktop.
+export XDG_CURRENT_DESKTOP=sway:ADG
+export XDG_SESSION_DESKTOP=adg-power
+export XDG_SESSION_TYPE=wayland
+export MOZ_ENABLE_WAYLAND=1
+export QT_QPA_PLATFORM="wayland;xcb"
+export ELECTRON_OZONE_PLATFORM_HINT=auto
+# Render on the Intel iGPU so the RTX can stay in runtime suspend.
+export __GLX_VENDOR_LIBRARY_NAME=mesa
+export __EGL_VENDOR_LIBRARY_FILENAMES=/usr/share/glvnd/egl_vendor.d/50_mesa.json
+export WLR_DRM_DEVICES="$(/usr/libexec/adg-power/igpu-drm-path 2>/dev/null)"
+[ -z "$WLR_DRM_DEVICES" ] && unset WLR_DRM_DEVICES
+
+CONFIG=/usr/share/adg-power/sway/config
+[ -f "$HOME/.config/adg-power/sway.conf" ] && CONFIG="$HOME/.config/adg-power/sway.conf"
+exec sway --config "$CONFIG"

@@ -1,0 +1,6 @@
+[Desktop Entry]
+Name=ADG Power OS
+Comment=Low-power Sway session with the ADG Power dashboard
+Exec=/usr/bin/adg-power-session
+Type=Application
+DesktopNames=sway;ADG

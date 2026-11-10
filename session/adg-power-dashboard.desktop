@@ -1,0 +1,8 @@
+[Desktop Entry]
+Name=ADG Power Dashboard
+Comment=Battery, network, Bluetooth and power controls
+Exec=adg-power-dashboard
+Icon=adg-power
+Terminal=false
+Type=Application
+Categories=System;Settings;

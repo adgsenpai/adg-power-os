@@ -1,0 +1,13 @@
+#!/bin/sh
+# Print the DRM card path of the boot (integrated) GPU, so wlroots never
+# opens the NVIDIA card and keeps it in runtime suspend. Prints nothing if
+# it cannot tell, in which case wlroots picks a device itself.
+for card in /dev/dri/by-path/pci-*-card; do
+    [ -e "$card" ] || continue
+    pci=$(basename "$card" | sed -e 's/^pci-//' -e 's/-card$//')
+    if [ "$(cat "/sys/bus/pci/devices/$pci/boot_vga" 2>/dev/null)" = "1" ]; then
+        # wlroots splits WLR_DRM_DEVICES on ':', so pass the resolved /dev/dri/cardN path.
+        readlink -f "$card"
+        exit 0
+    fi
+done

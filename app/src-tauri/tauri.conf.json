@@ -1,0 +1,36 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "ADG Power Dashboard",
+  "identifier": "com.adgstudios.power.dashboard",
+  "version": "0.1.0",
+  "build": {
+    "beforeDevCommand": "pnpm dev",
+    "devUrl": "http://127.0.0.1:1420",
+    "beforeBuildCommand": "pnpm build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "ADG Power OS",
+        "width": 1600,
+        "height": 940,
+        "minWidth": 900,
+        "minHeight": 600,
+        "decorations": true,
+        "backgroundColor": "#0b101b"
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src ipc: http://ipc.localhost"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["deb"],
+    "icon": ["icons/32x32.png", "icons/128x128.png", "icons/icon.png"],
+    "category": "Utility",
+    "shortDescription": "ADG Power OS dashboard"
+  }
+}
