@@ -39,7 +39,11 @@ echo "== ADG Power OS install ($([ $APPLY -eq 1 ] && echo APPLY || echo DRY RUN)
 missing=()
 for b in sway foot swaybg swayidle swaylock iw pkexec; do command -v "$b" >/dev/null || missing+=("$b"); done
 # Ubuntu 26.04 ships the agent in /usr/libexec; older releases in the multiarch dir.
-ls /usr/libexec/polkit-mate-authentication-agent-1 /usr/lib/*/polkit-mate/polkit-mate-authentication-agent-1 >/dev/null 2>&1 || missing+=("mate-polkit")
+agent=""
+for a in /usr/libexec/polkit-mate-authentication-agent-1 /usr/lib/*/polkit-mate/polkit-mate-authentication-agent-1; do
+    [ -x "$a" ] && agent="$a" && break
+done
+[ -n "$agent" ] || missing+=("mate-polkit")
 if [ ${#missing[@]} -gt 0 ]; then
     echo "Missing: ${missing[*]}"
     echo "  sudo apt install sway foot swaybg swayidle swaylock iw mate-polkit"
