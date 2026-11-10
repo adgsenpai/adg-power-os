@@ -15,11 +15,12 @@ client.focused_inactive #30334f #161c2d #9da7c2 #30334f #30334f
 client.unfocused        #30334f #0b101b #9da7c2 #30334f #30334f
 font pango:Inter 10
 
-# ---- power: idle dim, lock and DPMS off. No suspend timer (avoids killing builds).
+# ---- power: dim after 2 min (restores your brightness on input), screen off
+# after 10 min. No suspend timer, so long builds and downloads keep running.
 exec swayidle -w \
-    timeout 120 'adg-powerd call POST /api/brightness "{\"percent\":5}"' \
-         resume 'adg-powerd call POST /api/brightness "{\"percent\":20}"' \
-    timeout 300 'swaymsg "output * power off"' resume 'swaymsg "output * power on"' \
+    timeout 120 'adg-powerd call POST /api/brightness/dim' \
+         resume 'adg-powerd call POST /api/brightness/undim' \
+    timeout 600 'swaymsg "output * power off"' resume 'swaymsg "output * power on"' \
     before-sleep 'swaylock -f -c 0b101b'
 
 # ---- input
@@ -31,8 +32,10 @@ input type:touchpad {
 
 # ---- session services
 # Hand the Wayland environment to systemd/D-Bus activated services.
-exec systemctl --user import-environment WAYLAND_DISPLAY SWAYSOCK XDG_CURRENT_DESKTOP XDG_SESSION_TYPE
-exec dbus-update-activation-environment --systemd WAYLAND_DISPLAY SWAYSOCK XDG_CURRENT_DESKTOP
+# The iGPU variables matter: apps started by systemd (launcher, D-Bus
+# activation) would otherwise load the NVIDIA GL/Vulkan driver and wake the RTX.
+exec systemctl --user import-environment WAYLAND_DISPLAY SWAYSOCK XDG_CURRENT_DESKTOP XDG_SESSION_TYPE __EGL_VENDOR_LIBRARY_FILENAMES __GLX_VENDOR_LIBRARY_NAME __NV_PRIME_RENDER_OFFLOAD VK_DRIVER_FILES VK_ICD_FILENAMES LIBVA_DRIVER_NAME WEBKIT_DISABLE_DMABUF_RENDERER
+exec dbus-update-activation-environment --systemd WAYLAND_DISPLAY SWAYSOCK XDG_CURRENT_DESKTOP __EGL_VENDOR_LIBRARY_FILENAMES __GLX_VENDOR_LIBRARY_NAME VK_DRIVER_FILES LIBVA_DRIVER_NAME
 # Polkit agent, needed for service stops and the privileged helper.
 exec sh -c 'for a in /usr/libexec/polkit-mate-authentication-agent-1 /usr/lib/*/polkit-mate/polkit-mate-authentication-agent-1; do [ -x "$a" ] && exec "$a"; done' 
 # Telemetry daemon, then the eco profile (prior values are saved for revert).

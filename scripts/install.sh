@@ -87,8 +87,19 @@ if [ -x target/release/adg-powerd ] || [ $APPLY -eq 0 ]; then
         { echo "# Units masked only when booted with adgpower.eco=1. Edit freely."; "$BIN" policy --generator-list system; } > "$TMP/eco-mask-system.list"
         { echo "# User units masked only when booted with adgpower.eco=1."; "$BIN" policy --generator-list user; } > "$TMP/eco-mask-user.list"
         for l in system user; do
-            if [ -e "/etc/adg-power/eco-mask-$l.list" ]; then echo "= keeping existing /etc/adg-power/eco-mask-$l.list"
-            else put "$TMP/eco-mask-$l.list" "/etc/adg-power/eco-mask-$l.list" 0644; fi
+            dest="/etc/adg-power/eco-mask-$l.list"
+            if [ -e "$dest" ]; then
+                # Keep your edits; only append units added in newer versions.
+                new=$(grep -vxF -f "$dest" "$TMP/eco-mask-$l.list" | grep -v '^#' || true)
+                if [ -n "$new" ]; then
+                    echo "+ append to $dest: $(echo $new)"
+                    [ $APPLY -eq 1 ] && printf '%s\n' "$new" | sudo tee -a "$dest" >/dev/null
+                else
+                    echo "= $dest up to date"
+                fi
+            else
+                put "$TMP/eco-mask-$l.list" "$dest" 0644
+            fi
         done
     fi
 fi
@@ -112,6 +123,7 @@ fi
 # ---- 4. user service (no sudo)
 run systemctl --user daemon-reload
 run systemctl --user enable adg-powerd.service
+run systemctl --user restart adg-powerd.service
 echo
 echo "Done. Log out and choose 'ADG Power OS' on the login screen gear menu."
 echo "Normal Ubuntu, Docker and every existing service keep their current behaviour."

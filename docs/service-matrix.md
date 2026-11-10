@@ -21,6 +21,7 @@ Normal Ubuntu boot: **every unit keeps its original enablement.** The "Eco boot"
 | `k3s-agent.service` | system | kubernetes | Masked at eco boot | refused while containers run |
 | `snap.microk8s.daemon-kubelite.service` | system | kubernetes | Masked at eco boot | refused while containers run |
 | `postgresql.service` | system | database | Masked at eco boot | refused while clients are connected (port 5432) |
+| `postgresql@.service` | system | database | Masked at eco boot | refused while clients are connected (port 5432) |
 | `mysql.service` | system | database | Masked at eco boot | refused while clients are connected (port 3306) |
 | `mariadb.service` | system | database | Masked at eco boot | refused while clients are connected (port 3306) |
 | `redis-server.service` | system | database | Masked at eco boot | refused while clients are connected (port 6379) |
@@ -29,7 +30,9 @@ Normal Ubuntu boot: **every unit keeps its original enablement.** The "Eco boot"
 | `libvirtd.socket` | system | virtualization | Masked at eco boot | never stopped from the dashboard |
 | `virtqemud.socket` | system | virtualization | Masked at eco boot | never stopped from the dashboard |
 | `snap.lxd.daemon.service` | system | virtualization | Masked at eco boot | never stopped from the dashboard |
-| `ollama.service` | system | developer | Masked at eco boot | — |
+| `ollama.service` | system | gpu | Masked at eco boot | — |
+| `nvidia-persistenced.service` | system | gpu | Masked at eco boot | — |
+| `nvidia-powerd.service` | system | gpu | Masked at eco boot | — |
 | `unattended-upgrades.service` | system | updates | Masked at eco boot | — |
 | `apt-daily.timer` | system | updates | Masked at eco boot | — |
 | `apt-daily-upgrade.timer` | system | updates | Masked at eco boot | — |
@@ -47,6 +50,6 @@ Normal Ubuntu boot: **every unit keeps its original enablement.** The "Eco boot"
 | `tracker-miner-fs-3.service` | user | indexer | Masked at eco boot | — |
 | `evolution-data-server.service` | user | indexer | Masked at eco boot | — |
 
-State on this laptop at development time (normal boot): Docker, containerd and PostgreSQL enabled; 6 containers running; NetworkManager, bluetooth, PipeWire active.
+`postgresql@.service` is the template: masking it covers every cluster (`postgresql@18-main` here). `nvidia-persistenced` and `nvidia-powerd` hold the NVIDIA driver open; without them the RTX can reach runtime suspend.
 
-Units not installed on a machine are simply skipped by the generator and hidden in the dashboard.
+Units not installed on a machine are skipped by the generator and hidden in the dashboard.

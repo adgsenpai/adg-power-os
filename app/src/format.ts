@@ -49,3 +49,8 @@ export function budget(w: number | null | undefined): { name: string; tone: "gre
   if (w < 15) return { name: "Connected range", tone: "amber" };
   return { name: "Performance range", tone: "red" };
 }
+
+export function mib(bytes: number | null | undefined): string {
+  if (bytes == null) return "—";
+  return bytes >= 1024 ** 3 ? `${(bytes / 1024 ** 3).toFixed(1)} GB` : `${Math.round(bytes / 1024 ** 2)} MB`;
+}

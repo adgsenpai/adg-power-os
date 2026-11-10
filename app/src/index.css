@@ -19,22 +19,30 @@
 }
 
 html, body, #root { height: 100%; }
+/* Performance: no backdrop-filter and no fixed background. Both force
+   WebKitGTK to recomposite the whole window every frame, which costs watts
+   and was the main cause of the dashboard stalling on the iGPU. */
 body {
   margin: 0;
-  background: var(--color-bg) url("/wallpaper.png") center / cover fixed;
+  background: var(--color-bg);
   color: var(--color-text);
   font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+}
+.wallpaper {
+  position: fixed; inset: 0; z-index: -1; pointer-events: none;
+  background: var(--color-bg) url("/wallpaper.png") center / cover no-repeat;
+  opacity: 0.55;
 }
 .card {
-  background: color-mix(in srgb, var(--color-panel) 86%, transparent);
+  background: rgb(22 28 45 / 0.94);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-card);
-  backdrop-filter: blur(14px);
 }
-.tile { transition: background 120ms, border-color 120ms, transform 120ms; }
+.tile { transition: background 120ms, border-color 120ms; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
 .tile:hover { background: var(--color-panel-hover); }
-.tile:active { transform: scale(0.98); }
 .num { font-variant-numeric: tabular-nums; }
 ::-webkit-scrollbar { width: 8px; }
 ::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: 8px; }

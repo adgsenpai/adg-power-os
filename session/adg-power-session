@@ -10,9 +10,20 @@ export ELECTRON_OZONE_PLATFORM_HINT=auto
 # Render on the Intel iGPU so the RTX can stay in runtime suspend.
 export __GLX_VENDOR_LIBRARY_NAME=mesa
 export __EGL_VENDOR_LIBRARY_FILENAMES=/usr/share/glvnd/egl_vendor.d/50_mesa.json
+export __NV_PRIME_RENDER_OFFLOAD=0
+export LIBVA_DRIVER_NAME=iHD
+for icd in /usr/share/vulkan/icd.d/intel_icd.json /usr/share/vulkan/icd.d/intel_icd.x86_64.json; do
+    [ -f "$icd" ] && export VK_DRIVER_FILES="$icd" VK_ICD_FILENAMES="$icd" && break
+done
 export WLR_DRM_DEVICES="$(/usr/libexec/adg-power/igpu-drm-path 2>/dev/null)"
 [ -z "$WLR_DRM_DEVICES" ] && unset WLR_DRM_DEVICES
+# WebKitGTK (the dashboard) freezes on some hybrid-GPU setups with its DMA-BUF
+# renderer, especially after the display sleeps. The shared-memory path is
+# reliable and lighter on the iGPU.
+export WEBKIT_DISABLE_DMABUF_RENDERER=1
 
 CONFIG=/usr/share/adg-power/sway/config
 [ -f "$HOME/.config/adg-power/sway.conf" ] && CONFIG="$HOME/.config/adg-power/sway.conf"
-exec sway --config "$CONFIG"
+# Sway refuses to start while the proprietary NVIDIA module is loaded, even
+# though it only drives the Intel iGPU here (WLR_DRM_DEVICES above).
+exec sway --unsupported-gpu --config "$CONFIG"

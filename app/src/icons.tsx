@@ -48,3 +48,7 @@ export const Battery = ({ level = 100, charging = false, ...p }: P & { level?: n
     <rect x="4" y="9" width={Math.max(0.5, (13 * Math.min(100, Math.max(0, level))) / 100)} height="6" rx="1" fill="currentColor" stroke="none" />
     {charging && <path d="m11.5 8-2 4h3l-2 4" stroke="var(--color-bg)" strokeWidth={1.6} />}
   </>);
+export const Sparkle = (p: P) => base(p, <path d="M12 3v4M12 17v4M3 12h4M17 12h4M5.6 5.6l2.8 2.8M15.6 15.6l2.8 2.8M5.6 18.4l2.8-2.8M15.6 8.4l2.8-2.8" />);
+export const LogOut = (p: P) => base(p, <><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><path d="m16 17 5-5-5-5M21 12H9" /></>);
+export const Moon = (p: P) => base(p, <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8Z" />);
+export const Restart = (p: P) => base(p, <><path d="M3 12a9 9 0 1 0 3-6.7L3 8" /><path d="M3 3v5h5" /></>);

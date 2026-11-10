@@ -5,6 +5,8 @@
 //!
 //!   adg-power-helper gpu-runtime-pm <pci-address> auto|on
 //!   adg-power-helper wifi-powersave <interface> on|off
+//!   adg-power-helper eco-boot-once adg-power-os on
+//!       boot the "ADG Power OS" GRUB entry on the next restart only
 //!
 //! Arguments are validated against sysfs; nothing is passed to a shell.
 
@@ -60,12 +62,31 @@ fn wifi_powersave(iface: &str, value: &str) {
     }
 }
 
+/// One-shot boot into the eco entry via grub-reboot (sets next_entry in
+/// grubenv; GRUB clears it after use, so the following boot is normal again).
+fn eco_boot_once() {
+    if !Path::new("/etc/grub.d/42_adg_power_os").exists() {
+        fail("the ADG Power OS boot entry is not installed (scripts/install.sh --apply --grub)");
+    }
+    let cfg = fs::read_to_string("/boot/grub/grub.cfg").unwrap_or_default();
+    if !cfg.contains("'adg-power-os'") {
+        fail("grub.cfg has no adg-power-os entry; run sudo update-grub");
+    }
+    let bin = ["/usr/sbin/grub-reboot", "/sbin/grub-reboot"].into_iter().find(|p| Path::new(p).exists());
+    let bin = bin.unwrap_or_else(|| fail("grub-reboot not found"));
+    let st = Command::new(bin).arg("adg-power-os").env_clear().env("PATH", "/usr/sbin:/usr/bin:/sbin:/bin").status();
+    if !st.is_ok_and(|s| s.success()) {
+        fail("grub-reboot failed");
+    }
+}
+
 fn main() {
     let a: Vec<String> = std::env::args().skip(1).collect();
     match (a.first().map(String::as_str), a.get(1), a.get(2).map(String::as_str), a.len()) {
         (Some("gpu-runtime-pm"), Some(addr), Some(v @ ("auto" | "on")), 3) => gpu_runtime_pm(addr, v),
         (Some("wifi-powersave"), Some(iface), Some(v @ ("on" | "off")), 3) => wifi_powersave(iface, v),
-        _ => fail("usage: gpu-runtime-pm <pci> auto|on | wifi-powersave <iface> on|off"),
+        (Some("eco-boot-once"), Some(t), Some("on"), 3) if t == "adg-power-os" => eco_boot_once(),
+        _ => fail("usage: gpu-runtime-pm <pci> auto|on | wifi-powersave <iface> on|off | eco-boot-once adg-power-os on"),
     }
 }
 

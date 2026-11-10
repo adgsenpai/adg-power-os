@@ -63,6 +63,7 @@ password (cached briefly by polkit) and accepts only:
 
 - `gpu-runtime-pm <pci> auto|on` — writes `power/control` of a display-class PCI device
 - `wifi-powersave <iface> on|off` — `iw dev <iface> set power_save`
+- `eco-boot-once adg-power-os on` — `grub-reboot adg-power-os`, used by **Restart into Eco mode** in the power menu. Your GRUB menu is hidden (`GRUB_TIMEOUT=0`), so this is the easy way in; the boot after that is normal Ubuntu again.
 
 ## 6. Verify (acceptance tests)
 

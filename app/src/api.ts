@@ -76,8 +76,21 @@ export interface ServiceRow {
   description: string | null; stoppable: boolean; stop_blocker: string | null;
 }
 export interface AuditEntry { t: number; action: string; detail: string; ok: boolean }
+export interface RunningApp { unit: string; app: string; memory_bytes: number | null; cpu_seconds: number | null; tasks: number | null; started: number | null; windows: number | null }
+export interface Hogs { top: { pid: number; name: string; cpu_percent: number; rss_bytes: number }[]; gpu_users: { pid: number; name: string }[]; gpu_services: string[] }
+export type SessionAction = "lock" | "logout" | "suspend" | "reboot" | "poweroff" | "eco-reboot";
 
-const inTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
+export const inTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
+
+/** Every request gives up after this, so a stuck call can never freeze the UI. */
+const TIMEOUT_MS = 15000;
+
+function withTimeout<T>(p: Promise<T>, ms = TIMEOUT_MS): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const t = window.setTimeout(() => reject(new Error("adg-powerd did not answer in time")), ms);
+    p.then((v) => { window.clearTimeout(t); resolve(v); }, (e) => { window.clearTimeout(t); reject(e); });
+  });
+}
 
 interface Envelope<T> { ok: boolean; data?: T; error?: string }
 
@@ -85,13 +98,16 @@ export async function call<T>(method: "GET" | "POST", path: string, body?: unkno
   let env: Envelope<T>;
   if (inTauri) {
     const { invoke } = await import("@tauri-apps/api/core");
-    env = await invoke<Envelope<T>>("daemon", { method, path, body: body ?? null });
+    env = await withTimeout(invoke<Envelope<T>>("daemon", { method, path, body: body ?? null }));
   } else {
+    const ctl = new AbortController();
+    const t = window.setTimeout(() => ctl.abort(), TIMEOUT_MS);
     const res = await fetch(path, {
       method,
+      signal: ctl.signal,
       headers: body ? { "Content-Type": "application/json" } : undefined,
       body: body ? JSON.stringify(body) : undefined,
-    });
+    }).finally(() => window.clearTimeout(t));
     if (res.status === 502 || res.status === 504 || res.status === 500) throw new Error("adg-powerd is not running");
     env = await res.json();
   }
@@ -125,4 +141,8 @@ export const api = {
   serviceStart: (unit: string) => call("POST", "/api/services/start", { unit }),
   launch: (app: string) => call("POST", "/api/launch", { app }),
   audit: () => call<AuditEntry[]>("GET", "/api/audit"),
+  apps: () => call<{ apps: RunningApp[]; sway: boolean }>("GET", "/api/apps"),
+  closeApp: (unit: string) => call("POST", "/api/apps/close", { unit }),
+  hogs: () => call<Hogs>("GET", "/api/hogs"),
+  session: (a: SessionAction) => call("POST", `/api/session/${a}`),
 };

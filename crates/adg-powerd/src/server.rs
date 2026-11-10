@@ -112,6 +112,8 @@ pub fn route(d: &Daemon, req: &Request) -> (u16, Value) {
             .and_then(Value::as_f64)
             .ok_or("percent required".into())
             .and_then(|p| d.set_brightness_percent(p)),
+        ("POST", "/api/brightness/dim") => d.dim(true),
+        ("POST", "/api/brightness/undim") => d.dim(false),
         ("POST", "/api/keyboard") => b
             .get("value")
             .and_then(Value::as_i64)
@@ -151,6 +153,10 @@ pub fn route(d: &Daemon, req: &Request) -> (u16, Value) {
         ("POST", "/api/services/start") => s(b, "unit").ok_or("unit required".into()).and_then(|u| d.service_action(u, true)),
         ("POST", "/api/launch") => s(b, "app").ok_or("app required".into()).and_then(|a| d.launch(a)),
         ("GET", "/api/audit") => d.audit_log(),
+        ("GET", "/api/apps") => d.apps(),
+        ("POST", "/api/apps/close") => s(b, "unit").ok_or("unit required".into()).and_then(|u| d.app_stop(u)),
+        ("GET", "/api/hogs") => d.hogs(),
+        ("POST", p) if p.starts_with("/api/session/") => d.session_action(&p["/api/session/".len()..]),
         _ => return (404, json!({"ok": false, "error": "not found"})),
     };
     match r {

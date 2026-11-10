@@ -16,14 +16,18 @@ export function usePoll<T>(fn: () => Promise<T>, ms: number, deps: unknown[] = [
   }, []);
   useEffect(() => {
     let t: number | undefined;
+    let alive = true;
+    // One request at a time per poller; the next is scheduled only after the
+    // previous settles, and nothing runs while the window is hidden.
     const tick = async () => {
       if (!document.hidden) await refresh();
-      t = window.setTimeout(tick, ms);
+      if (alive) t = window.setTimeout(tick, ms);
     };
     tick();
     const onVis = () => !document.hidden && refresh();
     document.addEventListener("visibilitychange", onVis);
     return () => {
+      alive = false;
       window.clearTimeout(t);
       document.removeEventListener("visibilitychange", onVis);
     };

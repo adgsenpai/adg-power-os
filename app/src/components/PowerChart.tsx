@@ -10,15 +10,17 @@ export function PowerChart({ samples, height = 180, compact = false }: { samples
   const [hover, setHover] = useState<number | null>(null);
   const W = 600;
   const H = height;
-  const pad = compact ? { l: 0, r: 0, t: 6, b: 4 } : { l: 34, r: 8, t: 10, b: 22 };
+  const pad = compact ? { l: 0, r: 0, t: 6, b: 4 } : { l: 40, r: 8, t: 10, b: 22 };
 
-  const pts = useMemo(() => samples.filter((s) => s.smooth_w != null), [samples]);
+  // Only on-battery readings are power draw. On AC the gauge reports charge
+  // current into the battery, which looks like a 30 W "draw" and misleads.
+  const pts = useMemo(() => samples.filter((s) => s.smooth_w != null && s.discharging), [samples]);
   const view = useMemo(() => {
     if (pts.length < 2) return null;
     const t0 = pts[0].t;
     const t1 = pts[pts.length - 1].t;
     const vals = pts.flatMap((p) => [p.w ?? p.smooth_w!, p.smooth_w!]);
-    const maxW = Math.max(5, Math.ceil(Math.max(...vals) / 5) * 5);
+    const maxW = Math.max(10, Math.ceil(Math.max(...vals) / 10) * 10);
     const x = (t: number) => pad.l + ((t - t0) / Math.max(1, t1 - t0)) * (W - pad.l - pad.r);
     const y = (w: number) => pad.t + (1 - w / maxW) * (H - pad.t - pad.b);
     const line = (get: (s: Sample) => number | null) =>
@@ -31,7 +33,13 @@ export function PowerChart({ samples, height = 180, compact = false }: { samples
   }, [pts, H, pad.l, pad.r, pad.t, pad.b]);
 
   if (!view) {
-    return <div className="grid place-items-center text-sm text-muted" style={{ height }}>Collecting readings…</div>;
+    return (
+      <div className="grid place-items-center px-4 text-center text-sm text-muted" style={{ height }}>
+        {samples.length > 0 && !samples.some((s) => s.discharging)
+          ? (compact ? "Unplug to measure draw" : "On AC. Unplug to see battery draw; while charging the sensor reports charge rate, not usage.")
+          : "Collecting readings…"}
+      </div>
+    );
   }
 
   const onMove = (e: React.PointerEvent) => {

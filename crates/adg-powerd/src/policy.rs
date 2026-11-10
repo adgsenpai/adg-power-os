@@ -75,6 +75,9 @@ pub const POLICY: &[PolicyEntry] = &[
     entry!("k3s-agent.service", System, "kubernetes", BlockedAtEcoBoot, Guard::NoRunningContainers),
     entry!("snap.microk8s.daemon-kubelite.service", System, "kubernetes", BlockedAtEcoBoot, Guard::NoRunningContainers),
     entry!("postgresql.service", System, "database", BlockedAtEcoBoot, Guard::NoClientConnections(5432)),
+    // Debian/Ubuntu run each cluster as postgresql@<ver>-<name>; masking the
+    // template covers every instance.
+    entry!("postgresql@.service", System, "database", BlockedAtEcoBoot, Guard::NoClientConnections(5432)),
     entry!("mysql.service", System, "database", BlockedAtEcoBoot, Guard::NoClientConnections(3306)),
     entry!("mariadb.service", System, "database", BlockedAtEcoBoot, Guard::NoClientConnections(3306)),
     entry!("redis-server.service", System, "database", BlockedAtEcoBoot, Guard::NoClientConnections(6379)),
@@ -83,7 +86,10 @@ pub const POLICY: &[PolicyEntry] = &[
     entry!("libvirtd.socket", System, "virtualization", BlockedAtEcoBoot, Guard::Never),
     entry!("virtqemud.socket", System, "virtualization", BlockedAtEcoBoot, Guard::Never),
     entry!("snap.lxd.daemon.service", System, "virtualization", BlockedAtEcoBoot, Guard::Never),
-    entry!("ollama.service", System, "developer", BlockedAtEcoBoot),
+    entry!("ollama.service", System, "gpu", BlockedAtEcoBoot),
+    // Both keep the RTX open, so it never reaches runtime suspend (D3cold).
+    entry!("nvidia-persistenced.service", System, "gpu", BlockedAtEcoBoot),
+    entry!("nvidia-powerd.service", System, "gpu", BlockedAtEcoBoot),
     entry!("unattended-upgrades.service", System, "updates", BlockedAtEcoBoot),
     entry!("apt-daily.timer", System, "updates", BlockedAtEcoBoot),
     entry!("apt-daily-upgrade.timer", System, "updates", BlockedAtEcoBoot),
@@ -246,7 +252,7 @@ mod tests {
     #[test]
     fn docker_and_databases_blocked_at_eco_boot() {
         let sys = generator_list(System);
-        for u in ["docker.service", "docker.socket", "containerd.service", "k3s.service", "postgresql.service"] {
+        for u in ["docker.service", "docker.socket", "containerd.service", "k3s.service", "postgresql.service", "postgresql@.service", "nvidia-persistenced.service", "ollama.service"] {
             assert!(sys.contains(&u), "{u} missing");
         }
     }

@@ -9,9 +9,22 @@ use serde::Serialize;
 use serde_json::{json, Value};
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::sync::Mutex;
+use std::sync::{Mutex, OnceLock};
 use std::time::Duration;
 use zbus::blocking::Connection;
+
+/// No D-Bus call may hang a request (and through it, the dashboard).
+pub const DBUS_TIMEOUT: Duration = Duration::from_secs(20);
+pub const REAP_INTERVAL: Duration = Duration::from_secs(10);
+
+fn connect(system: bool) -> zbus::Result<Connection> {
+    let b = if system {
+        zbus::blocking::connection::Builder::system()?
+    } else {
+        zbus::blocking::connection::Builder::session()?
+    };
+    b.method_timeout(DBUS_TIMEOUT).build()
+}
 
 pub const SAMPLE_INTERVAL: Duration = Duration::from_secs(3);
 /// 3 s × 1200 = one hour of history.
@@ -61,6 +74,10 @@ pub struct Daemon {
     pub bluetooth: Option<Bluetooth>,
     audio: Audio,
     session_bus: Option<Connection>,
+    kbd_available: OnceLock<bool>,
+    /// Brightness before an idle dim, restored on input.
+    dimmed_from: Mutex<Option<(String, u32)>>,
+    reaper: Mutex<crate::apps::Reaper>,
 }
 
 fn hostname() -> String {
@@ -75,8 +92,8 @@ type ApiResult = Result<Value, String>;
 
 impl Daemon {
     pub fn new(sysfs_power: PathBuf) -> Self {
-        let system_bus = Connection::system().map_err(|e| eprintln!("system bus unavailable: {e}")).ok();
-        let session_bus = Connection::session().ok();
+        let system_bus = connect(true).map_err(|e| eprintln!("system bus unavailable: {e}")).ok();
+        let session_bus = connect(false).ok();
         let bluetooth = system_bus.clone().map(Bluetooth::new);
         if let Some(bt) = &bluetooth {
             if let Err(e) = bt.register_agent() {
@@ -96,6 +113,9 @@ impl Daemon {
             session_bus,
             system_bus,
             bluetooth,
+            kbd_available: OnceLock::new(),
+            dimmed_from: Mutex::new(None),
+            reaper: Mutex::new(crate::apps::Reaper::default()),
         }
     }
 
@@ -158,11 +178,14 @@ impl Daemon {
             memory: system::read_memory(),
             gpus: system::read_gpus(),
             backlight: system::read_backlight(Path::new("/sys/class/backlight")),
-            keyboard_backlight: power.as_ref().and_then(|p| p.keyboard_backlight()),
+            // Probe once: most laptops (this MSI included) never expose it.
+            keyboard_backlight: power.as_ref().and_then(|p| {
+                if *self.kbd_available.get_or_init(|| p.keyboard_backlight().is_some()) { p.keyboard_backlight() } else { None }
+            }),
             profile: power.map(|p| p.profile()).unwrap_or_default(),
             eco_applied: policy::load_revert(&self.state_dir).is_some(),
             eco_boot: eco_boot_active(&std::fs::read_to_string("/proc/cmdline").unwrap_or_default()),
-            sway: std::env::var_os("SWAYSOCK").is_some(),
+            sway: crate::sway::active(),
         }
     }
 
@@ -190,6 +213,21 @@ impl Daemon {
         let raw = policy::eco_brightness(bl.max_brightness, pct);
         self.power()?.set_brightness(&bl.device, raw)?;
         Ok(json!({ "raw": raw }))
+    }
+
+    pub fn dim(&self, on: bool) -> ApiResult {
+        let power = self.power()?;
+        let mut saved = self.dimmed_from.lock().unwrap();
+        if on {
+            let bl = system::read_backlight(Path::new("/sys/class/backlight")).ok_or("No backlight")?;
+            if saved.is_none() {
+                *saved = Some((bl.device.clone(), bl.brightness as u32));
+            }
+            power.set_brightness(&bl.device, policy::eco_brightness(bl.max_brightness, 5.0))?;
+        } else if let Some((dev, raw)) = saved.take() {
+            power.set_brightness(&dev, raw)?;
+        }
+        Ok(json!({}))
     }
 
     pub fn set_keyboard(&self, v: i32) -> ApiResult {
@@ -235,7 +273,7 @@ impl Daemon {
                 notes.push("bluetooth: left on (device connected)".into());
             }
         }
-        if std::env::var_os("SWAYSOCK").is_some() {
+        if crate::sway::active() {
             step(&mut notes, "display 60Hz", crate::sway::prefer_60hz());
         }
         policy::audit(&self.state_dir, "eco_apply", &notes.join("; "), true);
@@ -258,7 +296,7 @@ impl Daemon {
         if let (Some(true), Some(bt)) = (rs.bluetooth_powered, &self.bluetooth) {
             notes.push(format!("bluetooth: {:?}", bt.set_powered(true)));
         }
-        if std::env::var_os("SWAYSOCK").is_some() {
+        if crate::sway::active() {
             notes.push(format!("display: {:?}", crate::sway::restore_mode()));
         }
         policy::clear_revert(&self.state_dir);
@@ -270,7 +308,7 @@ impl Daemon {
 
     /// Ask the root helper (via pkexec + polkit) to run one allowlisted action.
     pub fn helper(&self, action: &str, target: &str, value: &str) -> ApiResult {
-        let ok_action = matches!(action, "gpu-runtime-pm" | "wifi-powersave");
+        let ok_action = matches!(action, "gpu-runtime-pm" | "wifi-powersave" | "eco-boot-once");
         let ok_value = matches!(value, "auto" | "on" | "off");
         let ok_target = !target.is_empty() && target.chars().all(|c| c.is_ascii_alphanumeric() || ":.-_".contains(c));
         if !(ok_action && ok_value && ok_target) {
@@ -407,6 +445,93 @@ impl Daemon {
         let argv = crate::launcher::command_for(app).ok_or("Unknown app")?;
         crate::launcher::spawn(app, &argv)?;
         Ok(json!({ "launched": app }))
+    }
+
+    // ------------------------------------------------------------ running apps
+
+    pub fn apps(&self) -> ApiResult {
+        let bus = self.session_bus.as_ref().ok_or("Session bus unavailable")?;
+        let pids = crate::sway::window_pids();
+        let list = crate::apps::list(bus, pids.as_ref())?;
+        Ok(json!({ "apps": list, "sway": pids.is_some() }))
+    }
+
+    pub fn app_stop(&self, unit: &str) -> ApiResult {
+        let bus = self.session_bus.as_ref().ok_or("Session bus unavailable")?;
+        let r = crate::apps::stop(bus, unit);
+        self.audit("app_close", unit, &r);
+        r.map(|_| json!({}))
+    }
+
+    /// Stop dashboard-launched apps whose windows have all been closed, so
+    /// background processes (Chrome's especially) don't keep using power.
+    pub fn reap(&self) {
+        let Some(bus) = self.session_bus.as_ref() else { return };
+        let Some(pids) = crate::sway::window_pids() else { return };
+        let Ok(list) = crate::apps::list(bus, Some(&pids)) else { return };
+        let doomed = self.reaper.lock().unwrap().pass(&list, policy::unix_now());
+        for unit in doomed {
+            let r = crate::apps::stop(bus, &unit);
+            self.audit("app_reaped", &unit, &r);
+        }
+    }
+
+    // ------------------------------------------------------------ power hogs
+
+    pub fn hogs(&self) -> ApiResult {
+        let top = crate::procs::top(8, Duration::from_millis(800));
+        let sys = self.system_bus.clone().map(Systemd::new);
+        let gpu_services: Vec<String> = crate::procs::GPU_SERVICES
+            .iter()
+            .filter(|u| sys.as_ref().and_then(|s| s.unit(u).ok()).is_some_and(|st| st.active_state == "active"))
+            .map(|u| u.to_string())
+            .collect();
+        Ok(serde_json::to_value(crate::procs::PowerHogs {
+            top,
+            gpu_users: crate::procs::gpu_users(Path::new("/proc")),
+            gpu_services,
+        })
+        .unwrap())
+    }
+
+    // ------------------------------------------------------------ session
+
+    fn logind(&self, method: &str) -> Result<(), String> {
+        let p = zbus::blocking::Proxy::new(self.bus()?, "org.freedesktop.login1", "/org/freedesktop/login1", "org.freedesktop.login1.Manager")
+            .map_err(crate::dbus::err_text)?;
+        p.call_with_flags::<_, _, ()>(method, zbus::proxy::MethodFlags::AllowInteractiveAuth.into(), &(true,))
+            .map(|_| ())
+            .map_err(crate::dbus::err_text)
+    }
+
+    pub fn session_action(&self, action: &str) -> ApiResult {
+        let r = match action {
+            "lock" => {
+                if crate::sway::active() {
+                    self.launch("lock").map(|_| ())
+                } else {
+                    zbus::blocking::Proxy::new(self.bus()?, "org.freedesktop.login1", "/org/freedesktop/login1/session/auto", "org.freedesktop.login1.Session")
+                        .and_then(|p| p.call::<_, _, ()>("Lock", &()))
+                        .map_err(crate::dbus::err_text)
+                }
+            }
+            "logout" => {
+                if crate::sway::active() {
+                    crate::sway::exit()
+                } else {
+                    Command::new("gnome-session-quit").args(["--logout", "--no-prompt"]).status()
+                        .map_err(|e| e.to_string())
+                        .and_then(|s| s.success().then_some(()).ok_or_else(|| "gnome-session-quit failed".to_string()))
+                }
+            }
+            "suspend" => self.logind("Suspend"),
+            "reboot" => self.logind("Reboot"),
+            "poweroff" => self.logind("PowerOff"),
+            "eco-reboot" => self.helper("eco-boot-once", "adg-power-os", "on").and_then(|_| self.logind("Reboot")).map(|_| ()),
+            _ => return Err("Unknown session action".into()),
+        };
+        self.audit("session", action, &r);
+        r.map(|_| json!({}))
     }
 
     pub fn audit_log(&self) -> ApiResult {

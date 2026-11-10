@@ -5,3 +5,4 @@ app/dist
 app/src-tauri/gen
 .claude/
 reports/
+app/tsconfig.tsbuildinfo

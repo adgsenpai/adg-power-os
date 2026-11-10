@@ -5,8 +5,8 @@ import * as I from "../icons";
 import { Button, Card, Empty, Pill, Toggle, useAction, usePoll } from "./ui";
 
 export function WifiView() {
-  const status = usePoll(api.wifi, 5000);
-  const nets = usePoll(api.networks, 10000);
+  const status = usePoll(api.wifi, 8000);
+  const nets = usePoll(api.networks, 15000);
   const { busy, run } = useAction();
   const [pending, setPending] = useState<AccessPoint | null>(null);
   const [password, setPassword] = useState("");
@@ -89,7 +89,7 @@ function DeviceIcon({ icon }: { icon: string | null }) {
 }
 
 export function BluetoothView() {
-  const bt = usePoll(api.bluetooth, 3000);
+  const bt = usePoll(api.bluetooth, 5000);
   const { busy, run } = useAction();
   const s = bt.data;
   const act = (a: string, addr: string | undefined, label: string, on?: boolean) =>
@@ -139,7 +139,7 @@ export function BluetoothView() {
 }
 
 export function AudioView() {
-  const a = usePoll(api.audio, 4000);
+  const a = usePoll(api.audio, 8000);
   const { run } = useAction();
   const s = a.data;
   return (
@@ -156,7 +156,7 @@ export function AudioView() {
                 {k.default ? <Pill tone="purple">Default</Pill> : <Button small onClick={() => run("sink", () => api.setSink(k.id), `Output: ${k.name}`, a.refresh)}>Use</Button>}
               </div>
               <input type="range" min={0} max={100} step={1} aria-label={`Volume for ${k.name}`} defaultValue={Math.round((k.volume ?? 0) * 100)}
-                onChange={(e) => run("vol", () => api.setVolume(k.id, Number(e.target.value) / 100))} className="mt-2 w-full" />
+                onPointerUp={(e) => run("vol", () => api.setVolume(k.id, Number(e.currentTarget.value) / 100))} onKeyUp={(e) => run("vol", () => api.setVolume(k.id, Number(e.currentTarget.value) / 100))} className="mt-2 w-full" />
             </li>
           ))}
         </ul>

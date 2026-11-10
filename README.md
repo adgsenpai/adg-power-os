@@ -50,17 +50,21 @@ Pick "Ubuntu" at boot or login and everything is exactly as it was.
 | 🎧 **Bluetooth & audio** | Pair, trust, connect and forget through BlueZ, with a pairing agent that only accepts requests for 60 seconds after you ask. Pick the PipeWire output, set volume, and see what Chrome is playing (MPRIS). |
 | 🌿 **Eco profile with rollback** | One tap sets power-saver, 20% brightness, keyboard light off, Bluetooth off if idle and 60 Hz under Sway. Previous values are saved and restored on revert. |
 | 🛡️ **Service matrix** | Every eco-relevant unit with its live state and policy. Stops go through systemd's own polkit prompt and are refused while containers run or database clients are connected. |
-| 🚀 **Launcher** | Claude Code in a terminal, Chrome, YouTube Music, files. Apps run in their own systemd scope, so closing the dashboard leaves them alone. |
+| 🖥️ **Embedded terminal** | Tabs of real PTYs (xterm.js) inside the dashboard, with a one-click Claude Code tab. Closing a tab or the window ends its shell. |
+| 🧹 **Running apps** | Everything launched from the dashboard runs in its own systemd unit. Close stops the whole app (helpers and background processes too) and frees its memory. Under Sway, apps whose windows are all gone are stopped automatically. |
+| 🔍 **What's using power** | Top processes by CPU and the services holding the NVIDIA driver open, so you can see why the draw is 25 W instead of 10. |
+| ⏻ **Power menu** | Lock, log out, suspend, restart, shut down, and **Restart into Eco mode**: a one-time boot into the eco entry, with no GRUB menu needed. |
+| 🚀 **Launcher** | Claude Code, Chrome (Intel VA-API video decode, no background mode), YouTube Music, files. Apps are pinned to the Intel iGPU so they don't wake the RTX. |
 | 📝 **Audit log** | Every change is appended to `~/.local/state/adg-power/audit.log`. |
 
 <table>
   <tr>
+    <td><img src="docs/screenshots/apps.png" alt="Running apps and power use" /></td>
     <td><img src="docs/screenshots/services.png" alt="Service matrix" /></td>
-    <td><img src="docs/screenshots/settings.png" alt="Settings and audit log" /></td>
   </tr>
   <tr>
+    <td align="center">Running apps and what's using power</td>
     <td align="center">Service matrix</td>
-    <td align="center">Settings, privileged controls and audit log</td>
   </tr>
 </table>
 
@@ -87,9 +91,9 @@ GRUB ── "Ubuntu" (untouched) ───────────────�
 **Security model**
 
 - The daemon and the dashboard run as you. The only root code is
-  `adg-power-helper`, which accepts exactly two actions (GPU runtime PM and
-  Wi-Fi power save), validates its arguments against sysfs and is gated by a
-  polkit action.
+  `adg-power-helper`, which accepts exactly three actions (GPU runtime PM,
+  Wi-Fi power save, and a one-time boot into the eco entry via `grub-reboot`),
+  validates its arguments and is gated by a polkit action.
 - The API lives on a Unix socket in `$XDG_RUNTIME_DIR` with mode `0600`, so
   browsers and other users cannot reach it.
 - No shell is ever spawned with user input. SSIDs and passwords are D-Bus

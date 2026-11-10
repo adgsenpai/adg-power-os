@@ -5,8 +5,9 @@ import { PowerChart } from "./PowerChart";
 import { Bar, Button, Card, Pill, Toggle, useAction } from "./ui";
 import type { View } from "../App";
 
-export function Home({ status, samples, wifi, bt, go, refresh }: {
-  status: Status; samples: Sample[]; wifi: WifiStatus | null; bt: BtStatus | null; go: (v: View) => void; refresh: () => void;
+export function Home({ status, samples, wifi, bt, go, openTerminal, refresh }: {
+  status: Status; samples: Sample[]; wifi: WifiStatus | null; bt: BtStatus | null; go: (v: View) => void;
+  openTerminal: (what: "claude" | "shell") => void; refresh: () => void;
 }) {
   const p = status.power;
   const { busy, run } = useAction();
@@ -22,7 +23,7 @@ export function Home({ status, samples, wifi, bt, go, refresh }: {
   const launch = (app: string, label: string) => run(`launch-${app}`, () => api.launch(app), `${label} opened`);
 
   const tiles: { key: string; label: string; sub: string; icon: React.ReactNode; on: () => void; accent?: boolean; subTone?: string }[] = [
-    { key: "claude", label: "Terminal", sub: "Claude Code", icon: <I.Terminal size={34} />, on: () => launch("claude", "Claude Code"), accent: true },
+    { key: "claude", label: "Terminal", sub: "Claude Code", icon: <I.Terminal size={34} />, on: () => openTerminal("claude"), accent: true },
     { key: "chrome", label: "Chrome", sub: "Browse · Search", icon: <I.Globe size={34} className="text-cyan" />, on: () => launch("chrome", "Chrome") },
     { key: "wifi", label: "Wi-Fi", sub: wifi?.ssid ? "Connected" : wifi?.enabled === false ? "Off" : "Not connected", icon: <I.Wifi size={34} className="text-cyan" />, on: () => go("wifi"), subTone: wifi?.ssid ? "text-green" : undefined },
     { key: "bt", label: "Bluetooth", sub: btAudio ? btAudio.name : bt?.powered ? "On" : "Off", icon: <I.Bluetooth size={34} className="text-purple" />, on: () => go("bluetooth") },
@@ -59,6 +60,20 @@ export function Home({ status, samples, wifi, bt, go, refresh }: {
         </div>
       </header>
 
+      {!status.eco_boot && (
+        <div className="card flex flex-wrap items-center gap-4 border-green/40 px-5 py-4">
+          <I.Leaf className="text-green" />
+          <div className="min-w-0 flex-1">
+            <div className="font-semibold">You're on a normal Ubuntu boot</div>
+            <div className="text-sm text-muted">Docker, PostgreSQL, Ollama and the NVIDIA services are still running and keep the CPU and RTX busy. Eco mode boots without them, once; the next restart is normal again.</div>
+          </div>
+          <Button tone="primary" busy={busy === "ecoboot"} onClick={() => {
+            if (confirm("Restart into Eco mode now? Save your work first.")) run("ecoboot", () => api.session("eco-reboot"));
+          }}>Restart into Eco mode</Button>
+          <Button small onClick={() => go("apps")}>See what's using power</Button>
+        </div>
+      )}
+
       <div className="grid gap-5 lg:grid-cols-3">
         <Card>
           <div className="mb-3 flex items-center gap-3">
@@ -88,9 +103,9 @@ export function Home({ status, samples, wifi, bt, go, refresh }: {
           <div className="flex gap-4">
             <div className="flex-1">
               <div className="mb-2 flex items-center gap-3"><I.Bolt size={26} className="text-cyan" /><h2 className="text-[17px] font-semibold">Power Draw</h2></div>
-              <div className="num text-5xl font-bold">{p.state === "discharging" || p.state === "charging" ? watts(p.smooth_w) : "—"}</div>
+              <div className="num text-5xl font-bold">{p.state === "discharging" ? watts(p.smooth_w) : "—"}</div>
               <div className="mt-1 text-xs text-muted">
-                {p.state === "discharging" ? (b ? <Pill tone={b.tone}>{b.name}</Pill> : "smoothed") : p.state === "charging" ? "charge rate into battery" : "on AC: battery draw not measurable"}
+                {p.state === "discharging" ? (b ? <Pill tone={b.tone}>{b.name}</Pill> : "smoothed") : p.state === "charging" ? `On AC, charging at ${watts(p.smooth_w)}. Unplug to measure usage.` : "On AC: battery draw not measurable"}
               </div>
             </div>
             <dl className="num grid grid-cols-[auto_auto] gap-x-4 gap-y-1 self-start text-sm">
@@ -146,12 +161,13 @@ export function Home({ status, samples, wifi, bt, go, refresh }: {
               <I.Gpu className="text-green" />
               <div className="flex-1">
                 <div className="font-medium">RTX 5060</div>
-                <div className="text-sm text-muted">{gpu ? (gpu.suspended ? "Suspended (verified)" : `Awake · PM ${gpu.runtime_control ?? "?"}`) : "Not found"}</div>
+                <div className="text-sm text-muted">{gpu ? (gpu.suspended ? "Asleep · kernel-verified" : "Awake, drawing power") : "Not found"}</div>
               </div>
-              {gpu && (
-                <Toggle label="Allow GPU runtime suspend" on={gpu.runtime_control === "auto"}
-                  onChange={(on) => run("gpu", () => api.helper("gpu-runtime-pm", gpu.pci_address, on ? "auto" : "on"), on ? "GPU may now suspend when idle" : "GPU kept awake", refresh)} />
-              )}
+              {gpu && (gpu.suspended
+                ? <Pill tone="green">Off</Pill>
+                : gpu.runtime_control !== "auto"
+                  ? <Button small onClick={() => run("gpu", () => api.helper("gpu-runtime-pm", gpu.pci_address, "auto"), "GPU may now suspend when idle", refresh)}>Allow sleep</Button>
+                  : <button className="text-xs text-amber underline" onClick={() => go("apps")}>Why awake?</button>)}
             </div>
             <div className="flex items-center gap-3 rounded-xl border border-border bg-panel-hover/40 p-3">
               <I.Monitor className="text-muted" />
@@ -162,7 +178,8 @@ export function Home({ status, samples, wifi, bt, go, refresh }: {
               <div className="flex items-center gap-3"><I.Sun className="text-muted" /><span className="flex-1 font-medium">Brightness</span><span className="num text-sm">{percent(status.backlight?.percent)}</span></div>
               <input type="range" min={5} max={100} step={5} aria-label="Brightness" disabled={!status.backlight}
                 defaultValue={Math.round(status.backlight?.percent ?? 50)} key={status.backlight ? "bl" : "none"}
-                onChange={(e) => run("bright", () => api.setBrightness(Number(e.target.value)), undefined, refresh)}
+                onPointerUp={(e) => run("bright", () => api.setBrightness(Number(e.currentTarget.value)), undefined, refresh)}
+                onKeyUp={(e) => run("bright", () => api.setBrightness(Number(e.currentTarget.value)), undefined, refresh)}
                 className="mt-2 w-full" />
             </div>
           </div>

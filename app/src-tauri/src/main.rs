@@ -6,6 +6,8 @@
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod pty;
+
 use serde_json::Value;
 use std::io::{Read, Write};
 use std::os::unix::net::UnixStream;
@@ -14,7 +16,7 @@ use std::time::Duration;
 const ALLOWED_PREFIXES: &[&str] = &[
     "/api/health", "/api/status", "/api/history", "/api/profile", "/api/brightness", "/api/keyboard",
     "/api/eco/", "/api/helper", "/api/wifi", "/api/bluetooth", "/api/audio", "/api/services",
-    "/api/launch", "/api/audit",
+    "/api/launch", "/api/audit", "/api/apps", "/api/hogs", "/api/session/",
 ];
 
 fn allowed(method: &str, path: &str) -> bool {
@@ -33,7 +35,9 @@ async fn daemon(method: String, path: String, body: Option<Value>) -> Result<Val
     tauri::async_runtime::spawn_blocking(move || {
         let sock = adg_power::server::default_socket();
         let mut s = UnixStream::connect(&sock).map_err(|_| "adg-powerd is not running".to_string())?;
-        s.set_read_timeout(Some(Duration::from_secs(30))).ok();
+        // Bounded so a stuck request can never wedge the UI.
+        s.set_read_timeout(Some(Duration::from_secs(25))).ok();
+        s.set_write_timeout(Some(Duration::from_secs(5))).ok();
         let body = body.map(|b| b.to_string()).unwrap_or_default();
         write!(
             s,
@@ -51,10 +55,23 @@ async fn daemon(method: String, path: String, body: Option<Value>) -> Result<Val
 }
 
 fn main() {
-    tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![daemon])
-        .run(tauri::generate_context!())
+    // WebKitGTK's DMA-BUF renderer can freeze on hybrid NVIDIA laptops,
+    // particularly after the display sleeps. The session sets this too.
+    if std::env::var_os("WEBKIT_DISABLE_DMABUF_RENDERER").is_none() {
+        std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
+    }
+    let app = tauri::Builder::default()
+        .manage(pty::Ptys::default())
+        .invoke_handler(tauri::generate_handler![daemon, pty::pty_open, pty::pty_write, pty::pty_resize, pty::pty_close])
+        .build(tauri::generate_context!())
         .expect("failed to start ADG Power dashboard");
+    app.run(|handle, event| {
+        if let tauri::RunEvent::Exit = event {
+            use tauri::Manager;
+            // Closing the dashboard ends its terminals; nothing lingers.
+            handle.state::<pty::Ptys>().kill_all();
+        }
+    });
 }
 
 #[cfg(test)]

@@ -109,6 +109,11 @@ fn main() {
                 s.sample();
                 std::thread::sleep(daemon::SAMPLE_INTERVAL);
             });
+            let r = d.clone();
+            std::thread::spawn(move || loop {
+                std::thread::sleep(daemon::REAP_INTERVAL);
+                r.reap();
+            });
             if let Err(e) = server::serve(d, socket) {
                 eprintln!("adg-powerd: {e}");
                 std::process::exit(1);

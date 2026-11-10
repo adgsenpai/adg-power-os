@@ -93,7 +93,7 @@ export function SettingsView({ status, refresh }: { status: Status; refresh: () 
         <label className="block text-sm">
           <div className="mb-1 flex justify-between"><span>Brightness ({status.backlight?.device ?? "none"})</span><span className="num">{percent(status.backlight?.percent)}</span></div>
           <input type="range" className="w-full" min={5} max={100} step={5} disabled={!status.backlight}
-            defaultValue={Math.round(status.backlight?.percent ?? 50)} onChange={(e) => run("b", () => api.setBrightness(Number(e.target.value)), undefined, refresh)} />
+            defaultValue={Math.round(status.backlight?.percent ?? 50)} onPointerUp={(e) => run("b", () => api.setBrightness(Number(e.currentTarget.value)), undefined, refresh)} onKeyUp={(e) => run("b", () => api.setBrightness(Number(e.currentTarget.value)), undefined, refresh)} />
         </label>
         <div className="mt-4 text-sm">
           <div className="mb-1">Keyboard backlight</div>
