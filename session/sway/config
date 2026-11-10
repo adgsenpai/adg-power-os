@@ -34,7 +34,7 @@ input type:touchpad {
 exec systemctl --user import-environment WAYLAND_DISPLAY SWAYSOCK XDG_CURRENT_DESKTOP XDG_SESSION_TYPE
 exec dbus-update-activation-environment --systemd WAYLAND_DISPLAY SWAYSOCK XDG_CURRENT_DESKTOP
 # Polkit agent, needed for service stops and the privileged helper.
-exec /usr/lib/x86_64-linux-gnu/polkit-mate/polkit-mate-authentication-agent-1
+exec sh -c 'for a in /usr/libexec/polkit-mate-authentication-agent-1 /usr/lib/*/polkit-mate/polkit-mate-authentication-agent-1; do [ -x "$a" ] && exec "$a"; done' 
 # Telemetry daemon, then the eco profile (prior values are saved for revert).
 exec systemctl --user start adg-powerd.service
 exec sh -c 'for i in 1 2 3 4 5 6 7 8 9 10; do adg-powerd call GET /api/health >/dev/null 2>&1 && break; sleep 0.5; done; adg-powerd call POST /api/eco/apply'
